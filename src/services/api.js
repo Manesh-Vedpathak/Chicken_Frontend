@@ -1,47 +1,68 @@
 import axios from "axios";
 
 const api = axios.create({
-  baseURL:
-    process.env.REACT_APP_API_URL ||
-    "https://chicken-backend-fuyx.onrender.com",
 
-  timeout: 15000,
+    baseURL:
+        process.env.REACT_APP_API_URL ||
+        "https://chicken-backend-fuyx.onrender.com",
 
-  headers: {
-    Accept: "application/json",
-  },
+    timeout: 120000,
+
+    headers: {
+        Accept: "application/json",
+    },
+
 });
 
-// Add the JWT token to requests when the user is logged in.
+// Add JWT token to every request
 api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
 
-    if (token) {
-      config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    (config) => {
 
-    return config;
-  },
-  (error) => Promise.reject(error)
+        const token =
+            localStorage.getItem("token");
+
+        if (token) {
+
+            config.headers =
+                config.headers || {};
+
+            config.headers.Authorization =
+                `Bearer ${token}`;
+
+        }
+
+        return config;
+
+    },
+
+    (error) => Promise.reject(error)
+
 );
 
-// Keep API errors available to the page that made the request.
-// Authentication state will be handled by AuthContext.
+// Handle API errors
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.code === "ECONNABORTED") {
-      error.message =
-        "The server took too long to respond. Please try again.";
-    } else if (!error.response) {
-      error.message =
-        "Cannot connect to the server. Check that Spring Boot is running.";
+
+    (response) => response,
+
+    (error) => {
+
+        if (error.code === "ECONNABORTED") {
+
+            error.message =
+                "Server response timed out. Please try again.";
+
+        } else if (!error.response) {
+
+            error.message =
+                "Unable to connect to the Chicken Backend.";
+
+        }
+
+        return Promise.reject(error);
+
     }
 
-    return Promise.reject(error);
-  }
 );
 
 export default api;
