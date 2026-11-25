@@ -4,7 +4,7 @@ const api = axios.create({
 
     baseURL:
         process.env.REACT_APP_API_URL ||
-        "https://chicken-backend-fuyx.onrender.com",
+        "https://chicken-backend-fuyx.onrender.com/api",
 
     timeout: 120000,
 
@@ -19,17 +19,11 @@ api.interceptors.request.use(
 
     (config) => {
 
-        const token =
-            localStorage.getItem("token");
+        const token = localStorage.getItem("token");
 
         if (token) {
-
-            config.headers =
-                config.headers || {};
-
-            config.headers.Authorization =
-                `Bearer ${token}`;
-
+            config.headers = config.headers || {};
+            config.headers.Authorization = `Bearer ${token}`;
         }
 
         return config;
@@ -48,15 +42,11 @@ api.interceptors.response.use(
     (error) => {
 
         if (error.code === "ECONNABORTED") {
-
             error.message =
                 "Server response timed out. Please try again.";
-
         } else if (!error.response) {
-
             error.message =
                 "Unable to connect to the Chicken Backend.";
-
         }
 
         return Promise.reject(error);
