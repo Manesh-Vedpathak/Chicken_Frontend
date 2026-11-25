@@ -1,8 +1,8 @@
 import React, {
-createContext,
-useContext,
-useEffect,
-useState,
+  createContext,
+  useContext,
+  useEffect,
+  useState,
 } from "react";
 
 import api from "../services/api";
@@ -13,217 +13,252 @@ const USER_STORAGE_KEY = "user";
 const TOKEN_STORAGE_KEY = "token";
 
 const normalizeRole = (role) => {
-const normalizedRole = String(role || "")
-.trim()
-.toUpperCase();
+  const normalizedRole = String(role || "")
+    .trim()
+    .toUpperCase();
 
-if (normalizedRole === "ADMIN" || normalizedRole === "ROLE_ADMIN") {
-return "ADMIN";
-}
+  if (
+    normalizedRole === "ADMIN" ||
+    normalizedRole === "ROLE_ADMIN"
+  ) {
+    return "ADMIN";
+  }
 
-if (
-["CUSTOMER", "USER", "ROLE_USER", "ROLE_CUSTOMER"].includes(
-normalizedRole
-)
-) {
-return "CUSTOMER";
-}
+  if (
+    ["CUSTOMER", "USER", "ROLE_USER", "ROLE_CUSTOMER"].includes(
+      normalizedRole
+    )
+  ) {
+    return "CUSTOMER";
+  }
 
-return null;
+  return null;
 };
 
 const readSavedUser = () => {
-try {
-const savedUser = localStorage.getItem(USER_STORAGE_KEY);
+  try {
+    const savedUser = localStorage.getItem(USER_STORAGE_KEY);
 
-if (!savedUser) return null;
+    if (!savedUser) return null;
 
-const parsedUser = JSON.parse(savedUser);
-const role = normalizeRole(parsedUser?.role);
+    const parsedUser = JSON.parse(savedUser);
+    const role = normalizeRole(parsedUser?.role);
 
-if (!role) return null;
+    if (!role) return null;
 
-return { ...parsedUser, role };
+    return { ...parsedUser, role };
 
-} catch {
-localStorage.removeItem(USER_STORAGE_KEY);
-return null;
-}
+  } catch {
+    localStorage.removeItem(USER_STORAGE_KEY);
+    return null;
+  }
 };
 
-const readSavedToken = () => localStorage.getItem(TOKEN_STORAGE_KEY);
+const readSavedToken = () =>
+  localStorage.getItem(TOKEN_STORAGE_KEY);
 
 export const AuthProvider = ({ children }) => {
-const [user, setUser] = useState(readSavedUser);
-const [token, setToken] = useState(readSavedToken);
-const [loading, setLoading] = useState(false);
+  const [user, setUser] = useState(readSavedUser);
+  const [token, setToken] = useState(readSavedToken);
+  const [loading, setLoading] = useState(false);
 
-useEffect(() => {
-if (token) {
-localStorage.setItem(TOKEN_STORAGE_KEY, token);
-} else {
-localStorage.removeItem(TOKEN_STORAGE_KEY);
-}
-}, [token]);
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token);
+    } else {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+  }, [token]);
 
-useEffect(() => {
-if (user) {
-localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-} else {
-localStorage.removeItem(USER_STORAGE_KEY);
-}
-}, [user]);
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(
+        USER_STORAGE_KEY,
+        JSON.stringify(user)
+      );
+    } else {
+      localStorage.removeItem(USER_STORAGE_KEY);
+    }
+  }, [user]);
 
-const login = async (email, password) => {
-setLoading(true);
+  // =====================================
+  // LOGIN
+  // =====================================
 
-try {
-  const response = await api.post("/auth/login", {
-    email: email.trim(),
-    password,
-  });
+  const login = async (email, password) => {
+    setLoading(true);
 
-  const data = response.data;
+    try {
+      const response = await api.post("/api/auth/login", {
+        email: email.trim(),
+        password,
+      });
 
-  if (!data?.success || !data?.token) {
-    return {
-      success: false,
-      message: data?.message || "Login failed.",
-    };
-  }
+      const data = response.data;
 
-  const role = normalizeRole(data.role);
+      if (!data?.success || !data?.token) {
+        return {
+          success: false,
+          message: data?.message || "Login failed.",
+        };
+      }
 
-  if (!role) {
-    console.error("Unsupported login role returned by backend:", data.role);
+      const role = normalizeRole(data.role);
 
-    return {
-      success: false,
-      message: `Unsupported account role: ${data.role || "missing"}. Please check the backend login response.`,
-    };
-  }
+      if (!role) {
+        console.error(
+          "Unsupported login role returned by backend:",
+          data.role
+        );
 
-  const loggedInUser = {
-    id: data.userId ?? data.id,
-    name: data.name,
-    email: data.email || email.trim(),
-    role,
+        return {
+          success: false,
+          message: `Unsupported account role: ${
+            data.role || "missing"
+          }. Please check the backend login response.`,
+        };
+      }
+
+      const loggedInUser = {
+        id: data.userId ?? data.id,
+        name: data.name,
+        email: data.email || email.trim(),
+        role,
+      };
+
+      setToken(data.token);
+      setUser(loggedInUser);
+
+      return {
+        success: true,
+        user: loggedInUser,
+        message: data.message || "Login successful.",
+      };
+
+    } catch (error) {
+      const status = error.response?.status;
+      const backendMessage = error.response?.data?.message;
+
+      let message = "Unable to connect to the server.";
+
+      if (status === 401) {
+        message = backendMessage || "Invalid email or password.";
+      } else if (status === 403) {
+        message = backendMessage || "Your account is inactive.";
+      } else if (backendMessage) {
+        message = backendMessage;
+      }
+
+      return { success: false, message };
+
+    } finally {
+      setLoading(false);
+    }
   };
 
-  setToken(data.token);
-  setUser(loggedInUser);
+  // =====================================
+  // REGISTER
+  // =====================================
 
-  return {
-    success: true,
-    user: loggedInUser,
-    message: data.message || "Login successful.",
+  const register = async (userData) => {
+    setLoading(true);
+
+    try {
+      const response = await api.post("/api/auth/register", {
+        name: userData.name.trim(),
+        email: userData.email.trim(),
+        phone: userData.phone.trim(),
+        password: userData.password,
+        address: userData.address?.trim() || "",
+      });
+
+      const data = response.data;
+
+      if (data?.success === false) {
+        return {
+          success: false,
+          message: data.message || "Registration failed.",
+        };
+      }
+
+      return {
+        success: true,
+        message: data?.message || "Registration successful.",
+      };
+
+    } catch (error) {
+      const status = error.response?.status;
+      const backendMessage = error.response?.data?.message;
+
+      let message = "Unable to register. Please try again.";
+
+      if (status === 400) {
+        message =
+          backendMessage || "Please check your registration details.";
+      } else if (status === 409) {
+        message =
+          backendMessage ||
+          "An account with these details may already exist.";
+      } else if (status === 403) {
+        message =
+          backendMessage || "Registration was blocked by the server.";
+      } else if (backendMessage) {
+        message = backendMessage;
+      }
+
+      return { success: false, message };
+
+    } finally {
+      setLoading(false);
+    }
   };
-} catch (error) {
-  const status = error.response?.status;
-  const backendMessage = error.response?.data?.message;
 
-  let message = "Unable to connect to the server.";
+  // =====================================
+  // LOGOUT
+  // =====================================
 
-  if (status === 401) {
-    message = backendMessage || "Invalid email or password.";
-  } else if (status === 403) {
-    message = backendMessage || "Your account is inactive.";
-  } else if (backendMessage) {
-    message = backendMessage;
-  }
+  const logout = () => {
+    setUser(null);
+    setToken(null);
 
-  return { success: false, message };
-} finally {
-  setLoading(false);
-}
-
-};
-
-const register = async (userData) => {
-setLoading(true);
-
-try {
-  const response = await api.post("/auth/register", {
-    name: userData.name.trim(),
-    email: userData.email.trim(),
-    phone: userData.phone.trim(),
-    password: userData.password,
-    address: userData.address?.trim() || "",
-  });
-
-  const data = response.data;
-
-  if (data?.success === false) {
-    return {
-      success: false,
-      message: data.message || "Registration failed.",
-    };
-  }
-
-  return {
-    success: true,
-    message: data?.message || "Registration successful.",
+    localStorage.removeItem("customerProfile");
   };
-} catch (error) {
-  const status = error.response?.status;
-  const backendMessage = error.response?.data?.message;
 
-  let message = "Unable to register. Please try again.";
+  // =====================================
+  // AUTHENTICATION STATUS
+  // =====================================
 
-  if (status === 400) {
-    message = backendMessage || "Please check your registration details.";
-  } else if (status === 409) {
-    message =
-      backendMessage ||
-      "An account with these details may already exist.";
-  } else if (status === 403) {
-    message = backendMessage || "Registration was blocked by the server.";
-  } else if (backendMessage) {
-    message = backendMessage;
-  }
+  const isAuthenticated = Boolean(token && user);
+  const isAdmin = user?.role === "ADMIN";
 
-  return { success: false, message };
-} finally {
-  setLoading(false);
-}
-
-};
-
-const logout = () => {
-setUser(null);
-setToken(null);
-localStorage.removeItem("customerProfile");
-};
-
-const isAuthenticated = Boolean(token && user);
-const isAdmin = user?.role === "ADMIN";
-
-return (
-<AuthContext.Provider
-value={{
-user,
-token,
-loading,
-login,
-register,
-logout,
-isAuthenticated,
-isAdmin,
-}}
->
-{children}
-</AuthContext.Provider>
-);
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        login,
+        register,
+        logout,
+        isAuthenticated,
+        isAdmin,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {
-const context = useContext(AuthContext);
+  const context = useContext(AuthContext);
 
-if (!context) {
-throw new Error("useAuth must be used inside an AuthProvider.");
-}
+  if (!context) {
+    throw new Error(
+      "useAuth must be used inside an AuthProvider."
+    );
+  }
 
-return context;
+  return context;
 };
 
 export default AuthContext;
