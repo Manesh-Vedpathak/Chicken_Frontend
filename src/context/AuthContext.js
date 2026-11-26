@@ -12,6 +12,10 @@ const AuthContext = createContext(null);
 const USER_STORAGE_KEY = "user";
 const TOKEN_STORAGE_KEY = "token";
 
+// =====================================
+// NORMALIZE USER ROLE
+// =====================================
+
 const normalizeRole = (role) => {
   const normalizedRole = String(role || "")
     .trim()
@@ -35,6 +39,10 @@ const normalizeRole = (role) => {
   return null;
 };
 
+// =====================================
+// READ SAVED USER
+// =====================================
+
 const readSavedUser = () => {
   try {
     const savedUser = localStorage.getItem(USER_STORAGE_KEY);
@@ -46,7 +54,10 @@ const readSavedUser = () => {
 
     if (!role) return null;
 
-    return { ...parsedUser, role };
+    return {
+      ...parsedUser,
+      role,
+    };
 
   } catch {
     localStorage.removeItem(USER_STORAGE_KEY);
@@ -54,23 +65,43 @@ const readSavedUser = () => {
   }
 };
 
+// =====================================
+// READ SAVED TOKEN
+// =====================================
+
 const readSavedToken = () =>
   localStorage.getItem(TOKEN_STORAGE_KEY);
 
+// =====================================
+// AUTH PROVIDER
+// =====================================
+
 export const AuthProvider = ({ children }) => {
+
   const [user, setUser] = useState(readSavedUser);
   const [token, setToken] = useState(readSavedToken);
   const [loading, setLoading] = useState(false);
 
+  // =====================================
+  // SAVE TOKEN
+  // =====================================
+
   useEffect(() => {
+
     if (token) {
       localStorage.setItem(TOKEN_STORAGE_KEY, token);
     } else {
       localStorage.removeItem(TOKEN_STORAGE_KEY);
     }
+
   }, [token]);
 
+  // =====================================
+  // SAVE USER
+  // =====================================
+
   useEffect(() => {
+
     if (user) {
       localStorage.setItem(
         USER_STORAGE_KEY,
@@ -79,6 +110,7 @@ export const AuthProvider = ({ children }) => {
     } else {
       localStorage.removeItem(USER_STORAGE_KEY);
     }
+
   }, [user]);
 
   // =====================================
@@ -86,10 +118,15 @@ export const AuthProvider = ({ children }) => {
   // =====================================
 
   const login = async (email, password) => {
+
     setLoading(true);
 
     try {
-      const response = await api.post("/api/auth/login", {
+
+      // Correct API endpoint
+      // api.js already contains /api in baseURL
+
+      const response = await api.post("/auth/login", {
         email: email.trim(),
         password,
       });
@@ -97,6 +134,7 @@ export const AuthProvider = ({ children }) => {
       const data = response.data;
 
       if (!data?.success || !data?.token) {
+
         return {
           success: false,
           message: data?.message || "Login failed.",
@@ -106,6 +144,7 @@ export const AuthProvider = ({ children }) => {
       const role = normalizeRole(data.role);
 
       if (!role) {
+
         console.error(
           "Unsupported login role returned by backend:",
           data.role
@@ -120,10 +159,15 @@ export const AuthProvider = ({ children }) => {
       }
 
       const loggedInUser = {
+
         id: data.userId ?? data.id,
+
         name: data.name,
+
         email: data.email || email.trim(),
+
         role,
+
       };
 
       setToken(data.token);
@@ -136,23 +180,35 @@ export const AuthProvider = ({ children }) => {
       };
 
     } catch (error) {
+
+      console.error("Login error:", error);
+
       const status = error.response?.status;
       const backendMessage = error.response?.data?.message;
 
       let message = "Unable to connect to the server.";
 
-      if (status === 401) {
+      if (status === 400) {
+        message = backendMessage || "Invalid login request.";
+      } else if (status === 401) {
         message = backendMessage || "Invalid email or password.";
       } else if (status === 403) {
-        message = backendMessage || "Your account is inactive.";
+        message = backendMessage || "Access forbidden. Please check your account status and backend security configuration.";
+      } else if (status >= 500) {
+        message = backendMessage || "Server error. Please try again later.";
       } else if (backendMessage) {
         message = backendMessage;
       }
 
-      return { success: false, message };
+      return {
+        success: false,
+        message,
+      };
 
     } finally {
+
       setLoading(false);
+
     }
   };
 
@@ -161,20 +217,32 @@ export const AuthProvider = ({ children }) => {
   // =====================================
 
   const register = async (userData) => {
+
     setLoading(true);
 
     try {
-      const response = await api.post("/api/auth/register", {
+
+      // Correct API endpoint
+      // api.js already contains /api in baseURL
+
+      const response = await api.post("/auth/register", {
+
         name: userData.name.trim(),
+
         email: userData.email.trim(),
+
         phone: userData.phone.trim(),
+
         password: userData.password,
+
         address: userData.address?.trim() || "",
+
       });
 
       const data = response.data;
 
       if (data?.success === false) {
+
         return {
           success: false,
           message: data.message || "Registration failed.",
@@ -187,29 +255,52 @@ export const AuthProvider = ({ children }) => {
       };
 
     } catch (error) {
+
+      console.error("Registration error:", error);
+
       const status = error.response?.status;
       const backendMessage = error.response?.data?.message;
 
       let message = "Unable to register. Please try again.";
 
       if (status === 400) {
+
         message =
           backendMessage || "Please check your registration details.";
+
       } else if (status === 409) {
+
         message =
           backendMessage ||
           "An account with these details may already exist.";
+
       } else if (status === 403) {
+
         message =
-          backendMessage || "Registration was blocked by the server.";
+          backendMessage ||
+          "Registration was blocked by the server.";
+
+      } else if (status >= 500) {
+
+        message =
+          backendMessage ||
+          "Server error. Please try again later.";
+
       } else if (backendMessage) {
+
         message = backendMessage;
+
       }
 
-      return { success: false, message };
+      return {
+        success: false,
+        message,
+      };
 
     } finally {
+
       setLoading(false);
+
     }
   };
 
@@ -218,10 +309,12 @@ export const AuthProvider = ({ children }) => {
   // =====================================
 
   const logout = () => {
+
     setUser(null);
     setToken(null);
 
     localStorage.removeItem("customerProfile");
+
   };
 
   // =====================================
@@ -229,9 +322,15 @@ export const AuthProvider = ({ children }) => {
   // =====================================
 
   const isAuthenticated = Boolean(token && user);
+
   const isAdmin = user?.role === "ADMIN";
 
+  // =====================================
+  // PROVIDER
+  // =====================================
+
   return (
+
     <AuthContext.Provider
       value={{
         user,
@@ -244,21 +343,32 @@ export const AuthProvider = ({ children }) => {
         isAdmin,
       }}
     >
+
       {children}
+
     </AuthContext.Provider>
+
   );
 };
 
+// =====================================
+// USE AUTH HOOK
+// =====================================
+
 export const useAuth = () => {
+
   const context = useContext(AuthContext);
 
   if (!context) {
+
     throw new Error(
       "useAuth must be used inside an AuthProvider."
     );
+
   }
 
   return context;
+
 };
 
 export default AuthContext;
